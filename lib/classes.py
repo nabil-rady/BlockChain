@@ -45,16 +45,24 @@ class Nonce:
         return self.val
 class Block:
     blocks = {}
+    genesis_block = True
     def __init__(self, transactions: Iterable[Transaction], prev_hash: hashlib.sha256 = None):
         self.transactions = transactions
         self.prev_hash = prev_hash
+        self.is_genesis_block = Block.genesis_block
+        Block.genesis_block = False
         self.nonce = Nonce(self)
-
+        self.next = None
     def verify(self) -> bool:
         for transaction in self.transactions:
             if not transaction.verify():
                 return False
-        # Check for prev hash
+        if not self.is_genesis_block:
+            if not self.prev_hash:
+                return False
+            prev_block = Block.blocks[self.prev_hash]
+            if not prev_block.next is self: ## n3mlo ezay
+                return False
         return check_nonce(self, self.nonce.val)
 
 class Wallet:
