@@ -56,7 +56,7 @@ def hash_block_with_nonce(b, nonce: str):
 def check_nonce(b, nonce: str) -> bool:
     h = hashlib.sha256()
     if b.prev_hash:
-        h.update(b.prev_hash)
+        h.update(b.prev_hash.encode())
     for t in b.transactions:
         h.update(t.input.save_pkcs1())
         h.update(t.output.save_pkcs1())

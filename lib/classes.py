@@ -1,7 +1,7 @@
 import hashlib
 import secrets
 from typing import Iterable
-from crypto_utils import check_nonce, generate_key_pair, sign_transaction, verify_transaction
+from crypto_utils import check_nonce, generate_key_pair, sign_transaction, verify_transaction, hash_block
 
 class Transaction:
     transaction_serial_number = 0
@@ -45,17 +45,45 @@ class Nonce:
         return self.val
 class Block:
     blocks = {}
+    genesis_block = True
     def __init__(self, transactions: Iterable[Transaction], prev_hash: hashlib.sha256 = None):
         self.transactions = transactions
         self.prev_hash = prev_hash
+        self.is_genesis_block = Block.genesis_block
+        Block.genesis_block = False
         self.nonce = Nonce(self)
-
+        self.next = None
     def verify(self) -> bool:
         for transaction in self.transactions:
             if not transaction.verify():
                 return False
-        # Check for prev hash
+        if not self.is_genesis_block:
+            if not self.prev_hash:
+                return False
+            prev_block = Block.blocks[self.prev_hash]
+            if not prev_block.next is self: ## n3mlo ezay
+                return False
         return check_nonce(self, self.nonce.val)
+
+class BlockChain:
+    def __init__(self) -> None:
+        self.chain = []
+    
+    def last_block(self) -> Block:
+        return self.chain[-1]
+
+    def add_block(self, transactions: Iterable[Transaction]) -> None:
+        b = None
+        if len(self.chain) == 0:
+            b = Block(transactions)
+        else:
+            prev_hash = hash_block(self.chain[-1])
+            b = Block(transactions, prev_hash)
+        self.chain.append(b)
+
+    def __repr__(self) -> str:
+        return f'This chain has {len(self.chain)} blocks'
+
 
 class Wallet:
     wallets = {}
