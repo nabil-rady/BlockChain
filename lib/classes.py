@@ -1,7 +1,9 @@
 import hashlib
 import secrets
+import json
 from typing import Iterable
-from crypto_utils import check_nonce, generate_key_pair, sign_transaction, verify_transaction, hash_block
+from crypto_utils import check_nonce, generate_key_pair, sign_transaction, verify_transaction, hash_block, hash_keys
+from datetime import datetime
 
 class Transaction:
     transaction_serial_number = 0
@@ -23,6 +25,9 @@ class Transaction:
     def verify(self) -> bool:
         return verify_transaction(self, self.input)
 
+    def set_signature(self, signature: str):
+        self.signature = signature
+
     def apply(self) -> None:
         if not self.verify():
             raise Exception('Invalid transaction')
@@ -31,8 +36,21 @@ class Transaction:
         Wallet.wallets[self.output].amount += self.amount
         Wallet.wallets[self.input].amount -= self.amount
 
+    def to_json(self):
+        return json.dumps({
+            'input': self.input,
+            'output': self.output,
+            'serial_number': self.transaction_serial_number,
+            'signature': self.signature.decode(),
+        })
+
+
     def __repr__(self) -> str:
         return f'{self.input} sent {self.amount} to {self.input}'
+
+def from_json_to_transaction(data: str) -> Transaction:
+    data = json.loads(data)
+    return Transaction(data['input'], data['output'], data['amount'], data['signature'])
 
 class Nonce:
     def __init__(self, block):
@@ -51,8 +69,10 @@ class Block:
         self.prev_hash = prev_hash
         self.is_genesis_block = Block.genesis_block
         Block.genesis_block = False
+        Block.blocks[hash_block(self)] = self
         self.nonce = Nonce(self)
         self.next = None
+        self.ts = datetime.now()
     def verify(self) -> bool:
         for transaction in self.transactions:
             if not transaction.verify():
@@ -66,20 +86,31 @@ class Block:
         return check_nonce(self, self.nonce.val)
 
 class BlockChain:
+    is_forked = False
+    last_blocks = []
     def __init__(self) -> None:
         self.chain = []
+        self.adj_list = {}
     
     def last_block(self) -> Block:
-        return self.chain[-1]
+        return BlockChain.last_blocks
 
-    def add_block(self, transactions: Iterable[Transaction]) -> None:
-        b = None
-        if len(self.chain) == 0:
-            b = Block(transactions)
+    def add_block(self, block:Block) -> None:
+        prev_hash = block.prev_hash
+        self.chain.append(block)
+        if prev_hash:
+            try:
+                adj_list = self.adj_list[prev_hash]
+                self.adj_list[prev_hash].append(hash_block(block))
+                BlockChain.is_forked = True
+                BlockChain.last_blocks.append(hash_block(block))
+            except KeyError:
+                self.adj_list[prev_hash] = []
+                self.adj_list[prev_hash].append(hash_block(block))
+                BlockChain.last_blocks.remove(prev_hash)
+                BlockChain.last_blocks.append(hash_block(block))
         else:
-            prev_hash = hash_block(self.chain[-1])
-            b = Block(transactions, prev_hash)
-        self.chain.append(b)
+            BlockChain.last_blocks.append(hash_block(block))
 
     def __repr__(self) -> str:
         return f'This chain has {len(self.chain)} blocks'
@@ -87,10 +118,12 @@ class BlockChain:
 
 class Wallet:
     wallets = {}
+    public_keys = {}
     def __init__(self, amount: float):
         self.public_key, self._private_key= generate_key_pair()
         self.amount = amount
         Wallet.wallets[self.public_key] = self
+        Wallet.public_keys[hash_keys(self.public_key.save_pkcs1())] = self.public_key
 
     def sign(self, transaction: Transaction) -> None:
         transaction.signatrue = sign_transaction(transaction, self._private_key)
@@ -105,3 +138,13 @@ class Wallet:
 
     # def calc_prev_hash(self, b:Block):
     #     hash_block(b)
+
+class Node:
+    nodes = 0
+    attack_nodes = 0
+    def __init__(self, attacker: bool = False):
+        self.wallet = Wallet(10)
+        self.attacker = attacker
+        Node.nodes += 1
+        if attacker:
+            Node.attack_nodes += 1
