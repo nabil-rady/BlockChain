@@ -1,6 +1,4 @@
-N = 4
-clients = []
 class Constants:
-    n = 4
+    n = 1
     def update(self, n:int) -> None:
         Constants.n = n

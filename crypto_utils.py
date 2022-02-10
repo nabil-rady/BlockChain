@@ -62,7 +62,6 @@ def check_nonce(b, nonce: str) -> bool:
         h.update(t.output.save_pkcs1())
         h.update(str(t.amount).encode())
     h.update(nonce.encode())
-    # print(Constants.n)
     return number_of_zero_bits(h.hexdigest()) == Constants.n
 
 def hash256(x: str) -> str:
